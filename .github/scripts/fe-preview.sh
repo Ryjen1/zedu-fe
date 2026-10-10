@@ -249,9 +249,9 @@ deploy() { # head-sha image
     return 0
   fi
   if [ "$override" = true ]; then
-    status "$sha" "Backend dependency" failure "Depends on backend preview $host. Merge after it's on dev, then delete the Backend URL line."
+    status "$sha" "Backend dependency" failure "Depends on backend preview $host. Merge after it's on the live backend, then delete the Backend URL line."
   else
-    status "$sha" "Backend dependency" success "Uses the dev backend"
+    status "$sha" "Backend dependency" success "Uses the live backend"
   fi
 
   gate=$(gate_of "$head_repo" "$labels")

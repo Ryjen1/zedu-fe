@@ -31,10 +31,10 @@
 
 ## Backend
 
-<!-- Leave this section empty: your preview runs against the dev backend.
+<!-- Leave this section empty: your preview runs against the live backend. Use a test account, not a real one.
      Only if this PR needs backend work that isn't on dev yet, add a line here starting with "Backend URL:"
      followed by that backend's host, for example https://api.<team>.groups.zedu.chat. The Backend dependency
-     check then blocks merging until the backend lands on dev and you delete the line. -->
+     check then blocks merging until the backend lands on the live backend and you delete the line. -->
 
 ## Test evidence
 
