@@ -297,7 +297,7 @@ const Topbar = () => {
                     onClick={() => setIsSheetOpen(false)}
                   >
                     <AddIcon />
-                    <span>Add organization</span>
+                    <span>Add organisation</span>
                   </Link>
                 </div>
               </SheetContent>
@@ -479,7 +479,7 @@ const Topbar = () => {
                     className="border border-neutral-600 rounded-[8px] flex gap-2 text-neutral-600 w-full items-center justify-center py-1 hover:bg-neutral-100 transition-colors font-medium"
                   >
                     <AddIcon />
-                    <span>Add a new organization</span>
+                    <span>Add a new organisation</span>
                   </Link>
                 </div>
               </PopoverContent>
