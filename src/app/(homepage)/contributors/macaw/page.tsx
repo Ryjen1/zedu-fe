@@ -920,6 +920,15 @@ const contributors: Contributor[] = [
     role: "member",
     hobbies: ["Travelling", "Reading", "Hiking"],
   },
+  {
+    id: "99",
+    name: "David Ariwi",
+    username: "DavidArondi",
+    workspaceEmail: "davieariwi@gmail.com",
+    gitHubEmail: "davieariwi@gmail.com",
+    role: "member",
+    hobbies: ["driving", "playing football", "travelling"],
+  },
 ];
 
 export default function MacawPage() {
