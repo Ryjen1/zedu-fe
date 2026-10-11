@@ -1,17 +1,17 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, RotateCcw } from "lucide-react";
 import SettingsLabel from "../../components/settings-label";
 import { GetRequest, PostRequest } from "~/utils/new-request";
 import Loading from "~/components/ui/loading";
-import { Switch } from "~/components/ui/switch";
-import { Checkbox } from "~/components/ui/checkbox";
-import { cn } from "~/lib/utils";
-import { showSuccess, showError } from "~/components/toast/sonner";
+import { showError } from "~/components/toast/sonner";
+import { showSuccess } from "~/components/toast/sonner";
 import {
   NotificationTypeSection,
   ScheduleSection,
+  DeliveryChannelsSection,
+  SaveStatusIndicator,
+  ActionBar,
 } from "./notification-sections";
 
 export type NotificationType = "all" | "mentions" | "nothing";
@@ -181,111 +181,25 @@ const NotificationPage = () => {
               Manage when and why you get notified.
             </p>
           </div>
-          <div className="flex items-center gap-1.5 text-xs">
-            {saveStatus === "saving" ? (
-              <span className="flex items-center gap-1 text-[#667085]">
-                <Loading width="14" height="14" />
-                Saving…
-              </span>
-            ) : saveStatus === "saved" && !hasChanges ? (
-              <span className="flex items-center gap-1 text-green-600">
-                <Check className="h-3.5 w-3.5" />
-                All changes saved
-              </span>
-            ) : hasChanges ? (
-              <span className="flex items-center gap-1 text-amber-600">
-                Unsaved changes
-              </span>
-            ) : null}
-          </div>
+          <SaveStatusIndicator
+            saveStatus={saveStatus}
+            hasChanges={hasChanges}
+          />
         </div>
 
         <div className="space-y-6">
           <NotificationTypeSection prefs={prefs} updatePref={updatePref} />
           <ScheduleSection prefs={prefs} updatePref={updatePref} />
-
-          <section className="rounded-xl border border-[#E6EAEF] p-5">
-            <h2 className="mb-1 text-sm font-semibold">Delivery channels</h2>
-            <p className="mb-4 text-xs text-[#667085]">
-              Choose how you want to be notified.
-            </p>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Email notifications</p>
-                  <p className="text-xs text-[#667085]">
-                    Receive notifications via email
-                  </p>
-                </div>
-                <Switch
-                  checked={prefs.emailNotifications}
-                  onCheckedChange={(checked) =>
-                    updatePref("emailNotifications", checked)
-                  }
-                />
-              </div>
-              {prefs.emailNotifications && (
-                <div className="flex items-center gap-2 pl-6">
-                  <Checkbox
-                    id="direct-mention-email"
-                    checked={prefs.directMentionEmail}
-                    onCheckedChange={(checked) =>
-                      updatePref("directMentionEmail", checked === true)
-                    }
-                  />
-                  <label
-                    htmlFor="direct-mention-email"
-                    className="cursor-pointer text-sm text-[#344054]"
-                  >
-                    Only send email for direct mentions
-                  </label>
-                </div>
-              )}
-            </div>
-          </section>
+          <DeliveryChannelsSection prefs={prefs} updatePref={updatePref} />
         </div>
 
-        <div className="mt-6 flex items-center justify-between border-t border-[#E6EAEF] pt-4">
-          <button
-            type="button"
-            onClick={() => setPrefs(DEFAULT_PREFERENCES)}
-            className="flex items-center gap-1.5 text-sm text-[#667085] transition-colors hover:text-primary-500"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Restore defaults
-          </button>
-          <div className="flex gap-3">
-            {hasChanges && (
-              <button
-                type="button"
-                onClick={() => setPrefs(savedPrefs)}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || !hasChanges}
-              className={cn(
-                "rounded-md px-5 py-2 text-sm font-medium text-white transition-colors",
-                hasChanges && !saving
-                  ? "bg-primary-500 hover:bg-primary-400"
-                  : "cursor-not-allowed bg-gray-300"
-              )}
-            >
-              {saving ? (
-                <span className="flex items-center gap-2">
-                  <Loading width="16" height="16" />
-                  Saving…
-                </span>
-              ) : (
-                "Save changes"
-              )}
-            </button>
-          </div>
-        </div>
+        <ActionBar
+          hasChanges={hasChanges}
+          saving={saving}
+          onRestoreDefaults={() => setPrefs(DEFAULT_PREFERENCES)}
+          onCancel={() => setPrefs(savedPrefs)}
+          onSave={handleSave}
+        />
       </div>
     </div>
   );
