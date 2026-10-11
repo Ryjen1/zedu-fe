@@ -1,92 +1,166 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Bell, BellRing, BellOff, Clock, Check, RotateCcw } from "lucide-react";
 import SettingsLabel from "../../components/settings-label";
 import { GetRequest, PostRequest } from "~/utils/new-request";
 import Loading from "~/components/ui/loading";
+import { Switch } from "~/components/ui/switch";
+import { Checkbox } from "~/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import { cn } from "~/lib/utils";
+import { showSuccess, showError } from "~/components/toast/sonner";
+
+type NotificationType = "all" | "mentions" | "nothing";
+type ActiveDays = "everyday" | "weekdays" | "weekends";
+type AllDayOption = "all_day" | "custom";
 
 type Preferences = {
-  notificationType: "all" | "mentions" | "nothing";
+  notificationType: NotificationType;
   timeFrom: string;
   timeTo: string;
-  infoMethod: "mobile" | "email";
+  allDay: AllDayOption;
+  activeDays: ActiveDays;
+  mobileNotifications: boolean;
+  emailNotifications: boolean;
+  directMentionEmail: boolean;
 };
 
-const defaultPreferences: Preferences = {
+const DEFAULT_PREFERENCES: Preferences = {
   notificationType: "all",
-  timeFrom: "00:00",
-  timeTo: "00:00",
-  infoMethod: "mobile",
+  timeFrom: "09:00",
+  timeTo: "17:00",
+  allDay: "all_day",
+  activeDays: "everyday",
+  mobileNotifications: true,
+  emailNotifications: true,
+  directMentionEmail: false,
 };
+
+const NOTIFICATION_TYPE_OPTIONS: {
+  id: NotificationType;
+  label: string;
+  description: string;
+  icon: React.ElementType;
+}[] = [
+  {
+    id: "all",
+    label: "All",
+    description: "Get notified for every new message",
+    icon: Bell,
+  },
+  {
+    id: "mentions",
+    label: "Mentions",
+    description: "Only when someone mentions you",
+    icon: BellRing,
+  },
+  {
+    id: "nothing",
+    label: "Nothing",
+    description: "Turn off all notifications",
+    icon: BellOff,
+  },
+];
+
+const ACTIVE_DAYS_OPTIONS: {
+  id: ActiveDays;
+  label: string;
+}[] = [
+  { id: "everyday", label: "Everyday" },
+  { id: "weekdays", label: "Weekdays" },
+  { id: "weekends", label: "Weekends" },
+];
+
+function getNotifyType(notifyAbout: string): NotificationType {
+  if (notifyAbout === "all_new_messages") return "all";
+  if (notifyAbout === "mentions") return "mentions";
+  return "nothing";
+}
+
+function convertTo24Hour(time: string) {
+  const parts = time.trim().split(" ");
+  if (parts.length < 2) return time;
+  const [t, suffix] = parts;
+  let [h, m] = t.split(":").map(Number);
+  if (suffix === "PM" && h !== 12) h += 12;
+  if (suffix === "AM" && h === 12) h = 0;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+}
+
+function convertTo12Hour(time: string) {
+  const [h, m] = time.split(":");
+  const hour = parseInt(h, 10);
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const formattedHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${formattedHour.toString().padStart(2, "0")}:${m} ${suffix}`;
+}
 
 const NotificationPage = () => {
-  const [prefs, setPrefs] = useState<Preferences>(defaultPreferences);
-  const [initialPrefs, setInitialPrefs] =
-    useState<Preferences>(defaultPreferences);
+  const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFERENCES);
+  const [savedPrefs, setSavedPrefs] =
+    useState<Preferences>(DEFAULT_PREFERENCES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "unsaved"
+  >("idle");
 
-  const hasChanges = JSON.stringify(prefs) !== JSON.stringify(initialPrefs);
+  const hasChanges = useMemo(
+    () => JSON.stringify(prefs) !== JSON.stringify(savedPrefs),
+    [prefs, savedPrefs]
+  );
 
   useEffect(() => {
-    const orgId = localStorage.getItem("orgId") || "";
+    if (hasChanges) {
+      setSaveStatus("unsaved");
+    }
+  }, [hasChanges]);
 
-    const fetchPreferences = async () => {
-      setLoading(true);
+  const fetchPreferences = useCallback(async () => {
+    const orgId = localStorage.getItem("orgId") || "";
+    setLoading(true);
+    try {
       const res = await GetRequest(
         `/organisations/${orgId}/notification-preference?device_type=web`
       );
       if (res.status === 200 || res.status === 201) {
         const data = res.data.data;
         const [from, to] = data.time_range.split(" - ").map(convertTo24Hour);
-
-        setPrefs({
+        const parsed: Preferences = {
           notificationType: getNotifyType(data.notify_about),
-          timeFrom: from,
-          timeTo: to,
-          infoMethod: data.send_mail ? "email" : "mobile",
-        });
-        setInitialPrefs({
-          notificationType: getNotifyType(data.notify_about),
-          timeFrom: from,
-          timeTo: to,
-          infoMethod: data.send_mail ? "email" : "mobile",
-        });
+          timeFrom: from || "09:00",
+          timeTo: to || "17:00",
+          allDay:
+            data.all_day === false || data.time_range ? "custom" : "all_day",
+          activeDays: (data.active_days as ActiveDays) ?? "everyday",
+          mobileNotifications: !data.send_mail,
+          emailNotifications: Boolean(data.send_mail),
+          directMentionEmail: Boolean(data.direct_mention_email),
+        };
+        setPrefs(parsed);
+        setSavedPrefs(parsed);
       }
-      setLoading(false);
-    };
-
-    fetchPreferences();
+    } catch {
+      showError("Failed to load notification preferences");
+    }
+    setLoading(false);
   }, []);
 
-  const getNotifyType = (
-    notify_about: string
-  ): Preferences["notificationType"] => {
-    if (notify_about === "all_new_messages") return "all";
-    if (notify_about === "mentions") return "mentions";
-    return "nothing";
-  };
-
-  const convertTo12Hour = (time: string) => {
-    const [h, m] = time.split(":");
-    const hour = parseInt(h, 10);
-    const suffix = hour >= 12 ? "PM" : "AM";
-    const formattedHour = hour % 12 === 0 ? 12 : hour % 12;
-    return `${formattedHour.toString().padStart(2, "0")}:${m} ${suffix}`;
-  };
-
-  const convertTo24Hour = (time: string) => {
-    const [t, suffix] = time.split(" ");
-    let [h, m] = t.split(":").map(Number);
-    if (suffix === "PM" && h !== 12) h += 12;
-    if (suffix === "AM" && h === 12) h = 0;
-    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-  };
+  useEffect(() => {
+    fetchPreferences();
+  }, [fetchPreferences]);
 
   const handleSave = async () => {
     const orgId = localStorage.getItem("orgId") || "";
-
     setSaving(true);
+    setSaveStatus("saving");
 
     const payload = {
       notify_about:
@@ -95,28 +169,45 @@ const NotificationPage = () => {
           : prefs.notificationType === "mentions"
             ? "mentions"
             : "nothing",
-      send_mail: prefs.infoMethod === "email",
+      send_mail: prefs.emailNotifications,
       time_range: `${convertTo12Hour(prefs.timeFrom)} - ${convertTo12Hour(prefs.timeTo)}`,
       device_type: "web",
+      all_day: prefs.allDay === "all_day",
+      active_days: prefs.activeDays,
+      direct_mention_email: prefs.directMentionEmail,
     };
 
-    const res = await PostRequest(
-      `/organisations/${orgId}/notification-preference?device_type=web`,
-      payload
-    );
-    if (res.status === 200 || res.status === 201) {
-      setInitialPrefs(prefs);
+    try {
+      const res = await PostRequest(
+        `/organisations/${orgId}/notification-preference?device_type=web`,
+        payload
+      );
+      if (res.status === 200 || res.status === 201) {
+        setSavedPrefs(prefs);
+        setSaveStatus("saved");
+        showSuccess("Preferences saved");
+      }
+    } catch {
+      setSaveStatus("unsaved");
+      showError("Failed to save preferences");
     }
     setSaving(false);
   };
 
-  const handleRevert = () => {
-    setPrefs(initialPrefs);
+  const handleRestoreDefaults = () => {
+    setPrefs(DEFAULT_PREFERENCES);
+  };
+
+  const updatePref = <K extends keyof Preferences>(
+    key: K,
+    value: Preferences[K]
+  ) => {
+    setPrefs((prev) => ({ ...prev, [key]: value }));
   };
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="flex min-h-[300px] items-center justify-center p-6">
         <Loading />
       </div>
     );
@@ -125,131 +216,264 @@ const NotificationPage = () => {
   return (
     <div>
       <SettingsLabel />
-      <div className="p-4 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-base font-semibold">
-            Your Notification Preferences
-          </h1>
-          <p className="text-sm text-[#344054]">
-            Manage when and why you get notified.
-          </p>
+      <div className="mx-auto max-w-2xl p-4 lg:px-8">
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-semibold">
+              Your Notification Preferences
+            </h1>
+            <p className="text-sm text-[#667085]">
+              Manage when and why you get notified.
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs">
+            {saveStatus === "saving" ? (
+              <span className="flex items-center gap-1 text-[#667085]">
+                <Loading width="14" height="14" />
+                Saving…
+              </span>
+            ) : saveStatus === "saved" && !hasChanges ? (
+              <span className="flex items-center gap-1 text-green-600">
+                <Check className="h-3.5 w-3.5" />
+                All changes saved
+              </span>
+            ) : hasChanges ? (
+              <span className="flex items-center gap-1 text-amber-600">
+                Unsaved changes
+              </span>
+            ) : null}
+          </div>
         </div>
 
-        {/* Notification Type */}
-        <div className="max-w-2xl">
-          <label className="block font-semibold text-sm mb-2">
-            Send notifications for:
-          </label>
-          <div className="space-y-3">
-            {["all", "mentions", "nothing"].map((type) => (
-              <label key={type} className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  name="notificationType"
-                  checked={prefs.notificationType === type}
-                  onChange={() =>
-                    setPrefs((prev) => ({
-                      ...prev,
-                      notificationType: type as Preferences["notificationType"],
-                    }))
+        <div className="space-y-6">
+          <section className="rounded-xl border border-[#E6EAEF] p-5">
+            <h2 className="mb-1 text-sm font-semibold">
+              Send notifications for
+            </h2>
+            <p className="mb-4 text-xs text-[#667085]">
+              Choose what types of notifications you want to receive.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {NOTIFICATION_TYPE_OPTIONS.map((option) => {
+                const Icon = option.icon;
+                const selected = prefs.notificationType === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => updatePref("notificationType", option.id)}
+                    className={cn(
+                      "flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all",
+                      selected
+                        ? "border-primary-500 bg-primary-50"
+                        : "border-[#E6EAEF] hover:border-gray-300 hover:bg-gray-50"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-full",
+                        selected
+                          ? "bg-primary-500 text-white"
+                          : "bg-gray-100 text-gray-500"
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <span className="text-sm font-medium">{option.label}</span>
+                    <span className="text-xs text-[#667085]">
+                      {option.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-[#E6EAEF] p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-[#667085]" />
+              <h2 className="text-sm font-semibold">
+                Schedule & Notification Window
+              </h2>
+            </div>
+            <p className="mb-4 text-xs text-[#667085]">
+              Set when you want to receive notifications. Outside this window,
+              notifications are paused.
+            </p>
+
+            <div className="mb-4">
+              <label className="mb-1.5 block text-xs font-medium text-[#344054]">
+                Time window
+              </label>
+              <div className="flex items-center gap-3">
+                <Select
+                  value={prefs.allDay}
+                  onValueChange={(val) => {
+                    updatePref("allDay", val as AllDayOption);
+                    if (val === "all_day") {
+                      updatePref("timeFrom", "00:00");
+                      updatePref("timeTo", "23:59");
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all_day">All day</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {prefs.allDay === "custom" && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      value={prefs.timeFrom}
+                      onChange={(e) => updatePref("timeFrom", e.target.value)}
+                      className="rounded-md border border-[#E6EAEF] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-[#667085]">to</span>
+                    <input
+                      type="time"
+                      value={prefs.timeTo}
+                      onChange={(e) => updatePref("timeTo", e.target.value)}
+                      className="rounded-md border border-[#E6EAEF] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#344054]">
+                Active days
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {ACTIVE_DAYS_OPTIONS.map((option) => {
+                  const selected = prefs.activeDays === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => updatePref("activeDays", option.id)}
+                      className={cn(
+                        "rounded-full px-4 py-1.5 text-sm font-medium transition-all",
+                        selected
+                          ? "bg-primary-500 text-white"
+                          : "border border-[#E6EAEF] text-[#344054] hover:border-gray-300 hover:bg-gray-50"
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-[#E6EAEF] p-5">
+            <h2 className="mb-1 text-sm font-semibold">Delivery channels</h2>
+            <p className="mb-4 text-xs text-[#667085]">
+              Choose how you want to be notified.
+            </p>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Mobile notifications</p>
+                  <p className="text-xs text-[#667085]">
+                    Receive push notifications on your mobile device
+                  </p>
+                </div>
+                <Switch
+                  checked={prefs.mobileNotifications}
+                  onCheckedChange={(checked) =>
+                    updatePref("mobileNotifications", checked)
                   }
                 />
-                <span className="capitalize text-sm">
-                  {type === "all" ? "All new messages" : type}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
+              </div>
 
-        <hr className="bg-[#E6EAEF] border my-4" />
+              <hr className="border-[#E6EAEF]" />
 
-        {/* Time Range */}
-        <div className="max-w-2xl">
-          <label className="block font-semibold text-sm mb-2">
-            Receive notifications only within:
-          </label>
-          <div className="flex items-center space-x-4">
-            <div className="flex flex-col items-start gap-1 text-sm">
-              <span className="font-medium">From</span>
-              <input
-                type="time"
-                value={prefs.timeFrom}
-                onChange={(e) =>
-                  setPrefs((prev) => ({ ...prev, timeFrom: e.target.value }))
-                }
-                className="border rounded p-3"
-              />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Email notifications</p>
+                  <p className="text-xs text-[#667085]">
+                    Receive notifications via email
+                  </p>
+                </div>
+                <Switch
+                  checked={prefs.emailNotifications}
+                  onCheckedChange={(checked) =>
+                    updatePref("emailNotifications", checked)
+                  }
+                />
+              </div>
+
+              {prefs.emailNotifications && (
+                <div className="flex items-center gap-2 pl-6">
+                  <Checkbox
+                    id="direct-mention-email"
+                    checked={prefs.directMentionEmail}
+                    onCheckedChange={(checked) =>
+                      updatePref("directMentionEmail", checked === true)
+                    }
+                  />
+                  <label
+                    htmlFor="direct-mention-email"
+                    className="cursor-pointer text-sm text-[#344054]"
+                  >
+                    Only send email for direct mentions
+                  </label>
+                </div>
+              )}
             </div>
-            <div className="flex flex-col items-start gap-1 text-sm">
-              <span className="font-medium">To</span>
-              <input
-                type="time"
-                value={prefs.timeTo}
-                onChange={(e) =>
-                  setPrefs((prev) => ({ ...prev, timeTo: e.target.value }))
-                }
-                className="border rounded p-3"
-              />
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            <span className="font-medium text-black">Note:</span> Outside this
-            time, notifications are paused.
-          </p>
+          </section>
         </div>
 
-        <hr className="bg-[#E6EAEF] border my-4" />
+        <div className="mt-6 flex items-center justify-between border-t border-[#E6EAEF] pt-4">
+          <button
+            type="button"
+            onClick={handleRestoreDefaults}
+            className="flex items-center gap-1.5 text-sm text-[#667085] transition-colors hover:text-primary-500"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Restore defaults
+          </button>
 
-        {/* Info Method */}
-        <div className="mb-4 max-w-2xl">
-          <label className="block font-semibold text-sm mb-2">
-            To keep me informed:
-          </label>
-          <div className="space-y-2 text-sm">
-            <label className="flex items-center space-x-2">
-              <input
-                type="radio"
-                name="infoMethod"
-                checked={prefs.infoMethod === "mobile"}
-                onChange={() =>
-                  setPrefs((prev) => ({ ...prev, infoMethod: "mobile" }))
-                }
-              />
-              <span>Use different settings for mobile devices</span>
-            </label>
-            <label className="flex items-center space-x-2">
-              <input
-                type="radio"
-                name="infoMethod"
-                checked={prefs.infoMethod === "email"}
-                onChange={() =>
-                  setPrefs((prev) => ({ ...prev, infoMethod: "email" }))
-                }
-              />
-              <span>Receive notifications via email</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Save/Cancel */}
-        {hasChanges && (
-          <div className="flex justify-end space-x-3 pt-4 max-w-xl">
+          <div className="flex gap-3">
+            {hasChanges && (
+              <button
+                type="button"
+                onClick={() => setPrefs(savedPrefs)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            )}
             <button
-              onClick={handleRevert}
-              className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
-            >
-              Revert Changes
-            </button>
-            <button
+              type="button"
               onClick={handleSave}
-              disabled={saving}
-              className="px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700"
+              disabled={saving || !hasChanges}
+              className={cn(
+                "rounded-md px-5 py-2 text-sm font-medium text-white transition-colors",
+                hasChanges && !saving
+                  ? "bg-primary-500 hover:bg-primary-400"
+                  : "cursor-not-allowed bg-gray-300"
+              )}
             >
-              {saving ? <Loading /> : "Save Changes"}
+              {saving ? (
+                <span className="flex items-center gap-2">
+                  <Loading width="16" height="16" />
+                  Saving…
+                </span>
+              ) : (
+                "Save changes"
+              )}
             </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
