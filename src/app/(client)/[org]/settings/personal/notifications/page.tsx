@@ -125,7 +125,10 @@ const NotificationPage = () => {
             ? "mentions"
             : "nothing",
       send_mail: prefs.emailNotifications,
-      time_range: `${convertTo12Hour(prefs.timeFrom)} - ${convertTo12Hour(prefs.timeTo)}`,
+      time_range:
+        prefs.allDay === "all_day"
+          ? "12:00 AM - 11:59 PM"
+          : `${convertTo12Hour(prefs.timeFrom)} - ${convertTo12Hour(prefs.timeTo)}`,
       device_type: "web",
       all_day: prefs.allDay === "all_day",
       active_days: prefs.activeDays,

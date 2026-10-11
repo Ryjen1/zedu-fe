@@ -72,6 +72,7 @@ export const NotificationTypeSection = ({
           <button
             key={option.id}
             type="button"
+            aria-pressed={selected}
             onClick={() => updatePref("notificationType", option.id)}
             className={cn(
               "flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all",
@@ -124,10 +125,6 @@ export const ScheduleSection = ({
           value={prefs.allDay}
           onValueChange={(val) => {
             updatePref("allDay", val as AllDayOption);
-            if (val === "all_day") {
-              updatePref("timeFrom", "00:00");
-              updatePref("timeTo", "23:59");
-            }
           }}
         >
           <SelectTrigger className="w-[140px]">
@@ -142,6 +139,7 @@ export const ScheduleSection = ({
           <div className="flex items-center gap-2">
             <input
               type="time"
+              aria-label="Start time"
               value={prefs.timeFrom}
               onChange={(e) => updatePref("timeFrom", e.target.value)}
               className="rounded-md border border-[#E6EAEF] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -149,6 +147,7 @@ export const ScheduleSection = ({
             <span className="text-sm text-[#667085]">to</span>
             <input
               type="time"
+              aria-label="End time"
               value={prefs.timeTo}
               onChange={(e) => updatePref("timeTo", e.target.value)}
               className="rounded-md border border-[#E6EAEF] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -168,6 +167,7 @@ export const ScheduleSection = ({
             <button
               key={option.id}
               type="button"
+              aria-pressed={selected}
               onClick={() => updatePref("activeDays", option.id)}
               className={cn(
                 "rounded-full px-4 py-1.5 text-sm font-medium transition-all",
